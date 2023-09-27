@@ -1,0 +1,161 @@
+name: Build-Zip-Aliyun
+run-name: WSA ${{ inputs.release_type }} ${{ inputs.arch }} with ${{ inputs.root_sol }} and ${{ inputs.gapps_brand }} as ${{ inputs.custom_model }}
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        type: choice
+        description: Target CPU architecture of WSA.
+        required: true
+        options: [x64, arm64, Both]
+        default: x64
+      release_type:
+        type: choice
+        description: WSA Release Channel
+        required: true
+        options: ["Retail","Release Preview","Insider Slow","Insider Fast","Insider Private"]
+        default: "Insider Private"
+      user_code:
+        type: string
+        description: User code for WSA Insider User (Optional)
+        required: false
+        default: ""
+      root_sol:
+        type: choice
+        description: Root solution
+        required: true
+        options: ["Non-root","KernelSU","Magisk Stable","Magisk Beta","Magisk Canary","Magisk Debug","Magisk Alpha (vvb2060)","Magisk Delta (HuskyDG)"]
+        default: "Magisk Delta (HuskyDG)"
+      gapps_brand:
+        type: choice
+        description: Google Apps brand
+        required: true
+        options: ["MindTheGapps v13.0","No GApps"]
+        default: "MindTheGapps v13.0"
+      custom_model:
+        type: choice
+        description: Custom model
+        required: true
+        options: ["WSA Default", "Pixel 4a", "Pixel 4a (5G)", "Pixel 5", "Pixel 5a", "Pixel 6", "Pixel 6 Pro", "Pixel 6a", "Pixel 7", "Pixel 7 Pro"]
+        default: "WSA Default"
+      compression:
+        type: choice
+        description: Compression format.
+        required: true
+        options: [".zip",".7z",".tar.xz"]
+        default: ".zip"
+      remove_amazon:
+        description: "Remove Amazon Appstore from the system"
+        required: true
+        default: true
+        type: boolean
+      Token:
+        description: 'Aaliyuntoken.'
+        required: false
+jobs:
+  matrix:
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix ⌛
+        id: set-matrix
+        uses: actions/github-script@v6
+        with:
+          script: |
+            let matrix = {};
+            let arch = "${{ github.event.inputs.arch }}"
+            switch ( arch ) {
+              case "x64":
+                matrix.arch = ["x64"];
+                break;
+              case "arm64":
+                matrix.arch = ["arm64"];
+                break;
+              default:
+                matrix.arch = ["x64", "arm64"];
+                break;
+            }
+            core.setOutput("matrix",JSON.stringify(matrix));
+  custbuild:
+    name: Build WSA
+    runs-on: ubuntu-latest
+    needs: matrix
+    strategy:
+      matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
+    steps:
+      - name: Checkout ♻️
+        uses: actions/checkout@v3
+
+      - name: Setup Python 👷
+        uses: actions/setup-python@v4
+        with:
+          check-latest: true
+          python-version: '3.x'
+          cache: 'pip'
+          cache-dependency-path: scripts/
+
+      - name: Setup Python3 Virtual Enviroment 🐍
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          PYTHON_VENV_DIR="$(dirname "$PWD")/python3-env"
+          python3 -m venv "$PYTHON_VENV_DIR" || abort "Failed to create python3 virtual env"
+          # shellcheck disable=SC1091
+          source "$PYTHON_VENV_DIR/bin/activate" || abort "Failed to activate python3 virtual env"
+          python3 -c "import pkg_resources; pkg_resources.require(open('requirements.txt',mode='r'))" &>/dev/null || {
+              echo "Installing Python3 dependencies"
+              python3 -m pip install --upgrade -r requirements.txt || abort "Failed to install python3 dependencies"
+          }
+          deactivate
+
+      - name: Install Ubuntu Dependencies 🧑‍🏭
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: e2fsprogs attr unzip qemu-utils python3-venv
+          version: 1.0
+
+      - name: Build WSA 🏗️
+        id: wsa
+        run: |
+          declare -A opts=( ["RELEASE_TYPE,Retail"]="retail" ["RELEASE_TYPE,Release Preview"]="RP" ["RELEASE_TYPE,Insider Slow"]="WIS" ["RELEASE_TYPE,Insider Fast"]="WIF" ["RELEASE_TYPE,Insider Private"]="latest" ["ROOT_SOL,Magisk Stable"]="stable" ["ROOT_SOL,Magisk Beta"]="beta" ["ROOT_SOL,Magisk Canary"]="canary" ["ROOT_SOL,Magisk Debug"]="debug" ["ROOT_SOL,Magisk Delta (HuskyDG)"]="delta" ["ROOT_SOL,Magisk Alpha (vvb2060)"]="alpha" ["ROOT_SOL,KernelSU"]="kernelsu" ["ROOT_SOL,Non-root"]="none" ["GAPPS_BRAND,MindTheGapps v13.0"]="MindTheGapps" ["GAPPS_BRAND,No GApps"]="none" ["CUSTOM_MODEL,WSA Default"]="none" ["CUSTOM_MODEL,Pixel 4a"]="sunfish" ["CUSTOM_MODEL,Pixel 4a (5G)"]="bramble" ["CUSTOM_MODEL,Pixel 5"]="redfin" ["CUSTOM_MODEL,Pixel 5a"]="barbet" ["CUSTOM_MODEL,Pixel 6 Pro"]="raven" ["CUSTOM_MODEL,Pixel 6"]="oriole" ["CUSTOM_MODEL,Pixel 6a"]="bluejay" ["CUSTOM_MODEL,Pixel 7"]="panther" ["CUSTOM_MODEL,Pixel 7 Pro"]="cheetah" ["REMOVE_AMAZON,true"]="--remove-amazon" ["COMPRESSION,.zip"]="zip" ["COMPRESSION,.7z"]="7z" ["COMPRESSION,.tar.xz"]="xz" )
+
+          if [[ "${{ inputs.root_sol }}" == *Magisk* ]]; then
+              MAGISK_VER="${opts[ROOT_SOL,${{ inputs.root_sol }}]}"
+              ROOT_SOL="magisk"
+          else
+              ROOT_SOL="${opts[ROOT_SOL,${{ inputs.root_sol }}]}"
+              MAGISK_VER="${opts[ROOT_SOL,Magisk Stable]}"
+          fi
+
+          mkdir -p download
+          echo -e "user_code=$(cat $GITHUB_EVENT_PATH | jq -r '.inputs.user_code')" > download/.ms_account
+          ./scripts/build.sh --arch ${{ matrix.arch }} --release-type ${opts[RELEASE_TYPE,${{ inputs.release_type }}]} --magisk-ver $MAGISK_VER --gapps-brand ${opts[GAPPS_BRAND,${{ inputs.gapps_brand }}]} --custom-model ${opts[CUSTOM_MODEL,${{ inputs.custom_model }}]} --root-sol $ROOT_SOL --compress-format ${opts[COMPRESSION,${{ inputs.compression }}]} ${opts[REMOVE_AMAZON,${{ inputs.remove_amazon }}]}
+
+      - name: File Checksum ✔️
+        if: inputs.compression != '.zip'
+        working-directory: output
+        run: |
+          sha256sum '${{ steps.wsa.outputs.artifact }}${{ inputs.compression }}' >> sha256-checksum.txt
+
+
+      - name: Compress to Zip 🗜️
+        run: zip -r ${{ steps.wsa.outputs.artifact }}.zip output/${{ steps.wsa.outputs.artifact }}
+
+      - name: Upload 📦
+        working-directory: output
+        run: |
+          if [ -n "${{ github.event.inputs.Token }}" ]; then
+            wget https://github.com/tickstep/aliyunpan/releases/download/v0.2.7/aliyunpan-v0.2.7-linux-amd64.zip
+            unzip aliyunpan-v0.2.7-linux-amd64.zip
+            rm -rf aliyunpan-v0.2.7-linux-amd64.zip
+            mv ${{ github.workspace }}/${{ steps.wsa.outputs.artifact }}${{ inputs.compression }} ${{ github.workspace }}/output
+            ls
+            cd aliyunpan-v0.2.7-linux-amd64
+            ./aliyunpan login -RefreshToken=${{ github.event.inputs.Token }}
+            ./aliyunpan upload ${{ github.workspace }}/output/${{ steps.wsa.outputs.artifact }}${{ inputs.compression }} /电脑文件/WSA
+            ./aliyunpan logout -y
+          else
+            rm -rf ${{ github.workspace }}/output/*
+          fi
