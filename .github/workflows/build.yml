@@ -1,4 +1,5 @@
 name: Auto Build function (Use for call only)
+run-name: ${{ inputs.arch }}_${{ inputs.root }}_${{ inputs.gapps }} (Insider is ${{ inputs.indider }})
 on:
  workflow_call:
     inputs:
@@ -92,7 +93,7 @@ jobs:
           name: ${{ needs.build.outputs.zipname }}
 
       - name: Merge language and density resources 🧙🏻‍♂️
-        run: (Start-Process powerhshell.exe -NoNewWindow -PassThru -Args "-ExecutionPolicy Bypass -File MakePri.ps1" -WorkingDirectory "${{ github.workspace }}\output\${{ needs.build.outputs.zipname }}").WaitForExit()
+        run: (Start-Process pwsh.exe -NoNewWindow -PassThru -Args "-ExecutionPolicy Bypass -File MakePri.ps1" -WorkingDirectory "${{ github.workspace }}\output\${{ needs.build.outputs.zipname }}").WaitForExit()
 
       - name: Compact Images 💿
         run: |
