@@ -167,11 +167,6 @@ jobs:
           7z a -t7z -mx=6 -m0=LZMA2 -ms=on -mmt=8 -sdel -- ${{ needs.build.outputs.artifact }}.7z ${{ needs.build.outputs.artifact }}\*
           ($(Get-FileHash -Path ${{ needs.build.outputs.artifact }}.7z -Algorithm SHA256).Hash.ToLower().ToString() + "  " + "${{ needs.build.outputs.artifact }}.7z") | Out-File -FilePath sha256-checksum.txt -Encoding UTF8
 
-      - name: Upload Artifact 📦
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ needs.build.outputs.artifact }}-compressed
-          path: output
       - name: Create Release 📚
         id: create_release
         uses: actions/create-release@v1
@@ -192,6 +187,7 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ${{ needs.build.outputs.artifact }}${{ inputs.compression }}
           asset_name: ${{ needs.build.outputs.artifact }}${{ inputs.compression }}
+          asset_content_type: application/7z-compression
           path: output
 
       - name: Upload 📦
