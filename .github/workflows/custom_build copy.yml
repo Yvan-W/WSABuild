@@ -180,8 +180,8 @@ jobs:
 
       - name: Upload Release Asset 📦
         id: upload_release_asset
-        working-directory: output
         uses: actions/upload-release-asset@v1
+        working-directory: output
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
