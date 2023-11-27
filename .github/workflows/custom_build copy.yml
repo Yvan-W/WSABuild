@@ -180,6 +180,7 @@ jobs:
 
       - name: Upload Release Asset 📦
         id: upload_release_asset
+        working-directory: output
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -188,7 +189,6 @@ jobs:
           asset_path: ${{ needs.build.outputs.artifact }}${{ inputs.compression }}
           asset_name: ${{ needs.build.outputs.artifact }}${{ inputs.compression }}
           asset_content_type: application/7z-compression
-          path: output
 
       - name: Upload 📦
         run: |
