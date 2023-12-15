@@ -1,5 +1,5 @@
 import base64
-import os
+from os import getenv
 import html
 import json
 import re
@@ -30,8 +30,13 @@ class Prop(OrderedDict):
         return '\n'.join(f'{item}={self[item]}' for item in self)
 
 logging.captureWarnings(True)
-env_file = os.getenv('GITHUB_ENV')
-
+env_file = getenv('GITHUB_ENV')
+token = getenv("API_KEY")
+authorization = f'Bearer {token}'
+reqheaders = {
+    "Accept": "application/vnd.github.v3+json",
+    "Authorization" : authorization,
+}
 #Catagory ID
 cat_id = '858014f3-3934-4abe-8078-4aa193e74ca8'
 
@@ -63,7 +68,7 @@ def MagiskandGappsChecker(type):
         latestver = json.loads(requests.get(f"https://github.com/topjohnwu/magisk-files/raw/master/stable.json").content)['magisk']['version'].replace('\n', '')
         msg="Update Magisk Version from `v" + currentver + "` to `v" + latestver + "`"
     elif (type == "gapps"):
-        latestver = json.loads(requests.get(f"https://api.github.com/repos/YT-Advanced/MindTheGappsBuilder/releases/latest").content)['name']
+        latestver = json.loads(requests.get(f"https://api.github.com/repos/YT-Advanced/MindTheGappsBuilder/releases/latest", headers=reqheaders).content)['name']
         msg="Update MindTheGapps Version from `v" + currentver + "` to `v" + latestver + "`"
 
     # Check if version is the same or not
